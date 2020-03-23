@@ -9,9 +9,14 @@ Since the implementation was done as a library it is not a full solution to run 
 The actual implementation was done in [Rust](https://www.rust-lang.org/) with minimal dependencies as a project to learn more about the language. This is still a work in progress and any suggestions are welcome. For this reason there is probably no reason to submit this as a [crate](https://crates.io/).
 
 
+
 ## Chip8 Information and Resources
 
 Chip8 is an interpreted programming language developed in the 1970's to allow video games to move easily be made for computers like the [COSMAC VIP](https://en.wikipedia.org/wiki/COSMAC_VIP) and [Telmac 1800](https://en.wikipedia.org/wiki/Telmac_1800). Classic Chip8 programs include Pong, Space Invaders, Tetris, and Pac-Man. There are a number of public domain ROMs avaliable on [GitHub](https://github.com/dmatlack/chip8/tree/master/roms). These were used for testing the emulator implementation. More information can be found on the [Chip8 Wikipedia page](https://en.wikipedia.org/wiki/CHIP-8).
+
+## Documentation
+
+Documentation can be generated with `rustdoc` run `cargo doc --open` to have the Rust docs for this project open in a web browser.
 
 ## License
 

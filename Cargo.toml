@@ -1,5 +1,5 @@
 [package]
-name = "chip8_emulator"
+name = "chip8emu"
 version = "0.1.0"
 authors = ["Grant Wade <grant.wade@meridiansky.co>"]
 edition = "2018"
