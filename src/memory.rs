@@ -8,6 +8,8 @@ use std::io::prelude::*;
 pub struct ChipMemory {
     /// a vector representing the ram
     ram: Vec<u8>,
+    /// true if a rom has been loaded
+    loaded: bool, 
     /// program start location
     start: usize
 }
@@ -17,8 +19,23 @@ impl ChipMemory {
     pub fn init() -> Self {
         ChipMemory {
             ram: vec![0; 4096], // Size of chip8 ram
+            loaded: false,
             start: 512
         }
+    }
+
+    /// Returns true if a ROM has been loaded, false otherwise
+    pub fn has_loaded(&self) -> bool {
+        self.loaded
+    }
+
+    /// Return a two byte opcode
+    /// 
+    /// # Arguments
+    /// 
+    /// * `index` - index where opcode starts
+    pub fn get_opcode(&self, index: u16) -> u16 {
+        ((self.get_byte(index) as u16) << 8) | self.get_byte(index + 1) as u16
     }
 
     /// Load a binary into 
@@ -43,8 +60,27 @@ impl ChipMemory {
         self.ram[loc as usize] = val;
     }
 
+    /// Get a byte at `loc`
+    /// 
+    /// # Arguments
+    /// 
+    /// * `loc` - location of byte
     pub fn get_byte(&self, loc: u16) -> u8 {
         self.ram[loc as usize]
+    }
+
+    /// Get a range of bytes
+    /// 
+    /// # Arguments
+    /// 
+    /// * `loc` - start location of bytes
+    /// * `nbytes` - how many bytes
+    pub fn get_nbytes(&self, loc: u16, nbytes: u16) -> Vec<u8> {
+        let mut out_bytes: Vec<u8> = vec![0; nbytes as usize];
+        for i in 0..nbytes as usize {
+            out_bytes[i] = self.get_byte(loc + i as u16);
+        }
+        out_bytes
     }
 
     /// Dump the Chip8 memory into the console as
@@ -81,6 +117,7 @@ impl ChipMemory {
 
         // Load bytes into chip8 ram
         self.load_bytes(rom);
+        self.loaded = true;
         Ok(())
     }
 }

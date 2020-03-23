@@ -20,15 +20,15 @@ pub struct ChipRegisters {
 impl ChipRegisters {
     /// Init a Chip8 register struct
     pub fn init() -> Self {
-        let mut gp_reg = vec![0; 16];
-        let mut stack = vec![0; 16];
+        let gp_reg = vec![0; 16];
+        let stack = vec![0; 16];
         ChipRegisters {
             gp_reg,
             stack,
             i_reg: 0,
             d_reg: 0,
             s_reg: 0,
-            pc_reg: 0,
+            pc_reg: 512,
             sp_reg: 0,
         }
     }
@@ -130,7 +130,7 @@ impl ChipRegisters {
         }
     }
 
-    /// Decrement the sound register if vlaue is not 0
+    /// Decrement the sound register if value is not 0
     pub fn decr_s(&mut self) {
         if self.s_reg > 0 {
             self.s_reg -= 1;
@@ -143,14 +143,27 @@ impl ChipRegisters {
     /// 
     /// * `addr` - address to push to the stack
     pub fn push_stack(&mut self, addr: u16) {
-        self.stack[self.sp_reg as usize] = addr;
         self.sp_reg += 1;
+        self.stack[self.sp_reg as usize] = addr;
     }
 
     /// Pop an address from the stack, decrementing sp
     pub fn pop_stack(&mut self) -> u16 {
-        self.sp_reg -= 1;
         let addr = self.stack[self.sp_reg];
+        self.sp_reg -= 1;
         return addr;
+    }
+
+    /// print information on all registers
+    pub fn dump_registers(&self) {
+        println!("========BEGIN CHIP8 REGISTERS========");
+        println!("General: {:?}", self.gp_reg);
+        println!("      I: {:#?}", self.i_reg);
+        println!("  Delay: {:#?}", self.d_reg);
+        println!("  Sound: {:#?}", self.s_reg);
+        println!("PCountr: {:#?}", self.pc_reg);
+        println!("SPointr: {:#?}", self.sp_reg);
+        println!("  Stack: {:?}", self.stack);
+        println!("=========END CHIP8 REGISTERS=========");
     }
 }

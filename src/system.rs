@@ -1,7 +1,15 @@
+
+// Standard Library Modules //
+use std::error;
+use std::fmt;
+use std::thread;
+use std::time::Duration;
+
 // Local Modules Use //
 use memory::ChipMemory;
 use registers::ChipRegisters;
 use display::ChipDisplay;
+use keyboard::ChipKeyboard;
 
 // Modules From Crates.io //
 use rand::Rng;
@@ -10,7 +18,31 @@ use rand::Rng;
 pub mod memory;
 pub mod registers;
 pub mod display;
+pub mod keyboard;
 
+
+// Define a opcode execution error type //
+pub type ExResult<T> = std::result::Result<T, ExError>;
+
+#[derive(Debug, Clone)]
+pub struct ExError {
+    opcode: u16
+}
+
+impl fmt::Display for ExError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "invalid opcode previded for execution: {:04x}", self.opcode)
+    }
+}
+
+impl error::Error for ExError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+}
+
+/// Representation of a 2 byte chip8 opcode
 struct Opcode {
     h1: u16,
     v1: u16, 
@@ -19,6 +51,7 @@ struct Opcode {
 }
 
 impl Opcode {
+    /// create a new opcode struct from a 2 byte opcode
     fn new(opcode: u16) -> Self {
         let h1 = (opcode >> 12) & 0xf;
         let v1 = (opcode >> 8) & 0xf;
@@ -29,31 +62,86 @@ impl Opcode {
 }
 
 
+/// A representation of the Chip8 Architecture
 pub struct ChipSystem {
+    /// Registers and related methods
     pub registers: ChipRegisters,
+    /// Display and related methods
     pub display: ChipDisplay,
+    /// RAM and related functions
     pub ram: ChipMemory,
+    /// Keyboard and related functions
+    pub keyboard: ChipKeyboard,
 }
 
 impl ChipSystem {
+    /// Initialize the Chip8 System
     pub fn init() -> Self {
         let ram = ChipMemory::init();
         let disp = ChipDisplay::init();
         let reg = ChipRegisters::init();
+        let key = ChipKeyboard::init();
         ChipSystem {
             registers: reg,
             display: disp,
-            ram: ram
+            ram: ram,
+            keyboard: key
         }
     }
 
-    pub fn random_byte() -> u8 {
+    /// Return a random u8
+    fn random_byte() -> u8 {
         let mut rng = rand::thread_rng();
         let rand_byte: u8 = rng.gen();
         return rand_byte;
     }
 
-    pub fn ex_opcode(&mut self, opcode: u16) {
+    /// Execute a Chip8 Opcode
+    /// 
+    /// This function can deal with the original 35 Chip8 opcodes
+    /// 
+    /// # Arguments
+    /// 
+    /// * `opcode` - Two byte opcode to execute
+    /// 
+    /// ## Opcodes
+    /// 0. 0x0nnn - Unused instruction from actual hardware, ignored
+    /// 1. 0x00E0 - Clear Display
+    /// 2. 0x00EE - Return from subroutine
+    /// 3. 0x1nnn - Jump to address `nnn`
+    /// 4. 0x2nnn - Call subroutine at `nnn` store call address on stack
+    /// 5. 0x3xkk - Skip next instruction when `Vx == kk`
+    /// 6. 0x4xkk - Skip next instruction when `Vx != kk`
+    /// 7. 0x5xy0 - Skip next instruction when `Vx == Vy`
+    /// 8. 0x6xkk - Put the byte value in passed register `Vx = kk` 
+    /// 9. 0x7xkk - Add byte to register `Vx = Vx + kk` no borrow check
+    /// 10. 0x8xy0 - Store value of register `Vy` in `Vx` `Vx = Vy`
+    /// 11. 0x8xy1 - Logical OR the registers `Vx = Vx | Vy`
+    /// 12. 0x8xy2 - Logical AND the registers `Vx = Vx & Vy`
+    /// 13. 0x8xy3 - Logical XOR the registers `Vx = Vx ^ Vy`
+    /// 14. 0x8xy4 - Add the registers with overflow check `Vx = Vx + Vy`
+    /// 15. 0x8xy5 - Subtract the registers `Vx = Vx - Vy`, on borrow `Vf = 0 else 1`
+    /// 16. 0x8xy6 - Logical right shift, LSB to `Vf`, `Vx = Vx >> 1`
+    /// 17. 0x8xy7 - Subtract the registers `Vx = Vy - Vx`, on borrow `Vf = 0 else 1`
+    /// 18. 0x8xyE - Logical left shift, MSB to `Vf`, `Vx = Vx << 1`
+    /// 19. 0x9xy0 - SKip next instruction when `Vx != Vy`
+    /// 20. 0xAnnn - Set register `I` to `nnn`, `I = nnn`
+    /// 21. 0xBnnn - Jump to location `PC = nnn + V0`
+    /// 22. 0xCxkk - Set register to random value `Vx = rand<u8> & kk`
+    /// 23. 0xDxyn - Draw a sprite on the screen at xy of height n
+    /// 24. 0xEx9E - Skip next instruction if key with value `Vx` is pressed
+    /// 25. 0xExA1 - Skip next instruction if key with value `Vx` is not pressed
+    /// 26. 0xFx07 - Set the value in `Vx` to the delay timer
+    /// 27. 0xFx0A - Wait for keypress, store value in `Vx`
+    /// 28. 0xFx15 - Set the delay timer to value in `Vx`
+    /// 29. 0xFx18 - Set the sound timer to value in `Vx`
+    /// 30. 0xFx1E - Set value of `I` to `I = I + Vx`
+    /// 31. 0xFx29 - Set I to location of sprite location in `Vx`
+    /// 32. 0xFx33 - Store BCD of `Vx` in `I, I+1, I+2`
+    /// 33. 0xFx55 - Store `V0 -> Vx` at I
+    /// 34. 0xFx65 - Retrieve `V0 -> Vx` from I
+    ///  
+    pub fn ex_opcode(&mut self, opcode: u16) -> ExResult<()> {
         println!("Current Opcode: {:04x}", opcode);
         let comps = Opcode::new(opcode);
 
@@ -67,8 +155,8 @@ impl ChipSystem {
                         let pc: u16 = self.registers.pop_stack();
                         self.registers.set_pc(pc);
                     },
-                    // Not a valid opcode
-                    _ => panic!("Invalid Opcode: {:04x}", opcode)
+                    // Skip Opcode
+                    _ => {},
                 }
             },
             // JP - Jumps to address without modifying stack
@@ -78,8 +166,10 @@ impl ChipSystem {
             },
             // CALL - Jump to address with push to stack
             0x2 => {
-                let pc: u16 = (comps.v1 << 8) + (comps.v2 << 4) + comps.v3;
-                self.registers.push_stack(pc);
+                let new_pc: u16 = (comps.v1 << 8) + (comps.v2 << 4) + comps.v3;
+                let cur_pc = self.registers.get_pc();
+                self.registers.push_stack(cur_pc);
+                self.registers.set_pc(new_pc);
             },
             // SE Vx, Byte - Skip instruction if Vx == Byte
             0x3 => {
@@ -148,10 +238,9 @@ impl ChipSystem {
                         let reg_x_val = self.registers.get_gp(comps.v1 as usize);
                         let reg_y_val = self.registers.get_gp(comps.v2 as usize);
                         let holder: u16 = reg_x_val as u16 + reg_y_val as u16;
-                        if holder > 255 { // Carry occurred
-                            self.registers.set_gp(15, 1);
-                        } else {
-                            self.registers.set_gp(15, 0);
+                        match holder > 255 {
+                            true => self.registers.set_gp(15, 1),
+                            false => self.registers.set_gp(15, 0)
                         }
                         self.registers.set_gp(comps.v1 as usize, (holder & 0xff) as u8);
                     },
@@ -159,10 +248,9 @@ impl ChipSystem {
                     0x5 => {
                         let reg_x_val = self.registers.get_gp(comps.v1 as usize);
                         let reg_y_val = self.registers.get_gp(comps.v2 as usize);
-                        if reg_x_val < reg_y_val {
-                            self.registers.set_gp(15, 0);
-                        } else {
-                            self.registers.set_gp(15, 1);
+                        match reg_x_val < reg_y_val {
+                            true => self.registers.set_gp(15, 0),
+                            false => self.registers.set_gp(15, 1)
                         }
                         let holder = reg_x_val - reg_y_val;
                         self.registers.set_gp(comps.v1 as usize, holder);
@@ -178,10 +266,9 @@ impl ChipSystem {
                     0x7 => {
                         let reg_x_val = self.registers.get_gp(comps.v1 as usize);
                         let reg_y_val = self.registers.get_gp(comps.v2 as usize);
-                        if reg_y_val < reg_x_val {
-                            self.registers.set_gp(15, 0);
-                        } else {
-                            self.registers.set_gp(15, 1);
+                        match reg_y_val < reg_x_val {
+                            true => self.registers.set_gp(15, 0),
+                            false => self.registers.set_gp(15, 1)
                         }
                         let holder = reg_y_val - reg_x_val;
                         self.registers.set_gp(comps.v1 as usize, holder);
@@ -193,7 +280,7 @@ impl ChipSystem {
                         reg_x_val = reg_x_val << 1;
                         self.registers.set_gp(comps.v1 as usize, reg_x_val);
                     },
-                    _ => panic!("Invalid Opcode: {:04x}", opcode)
+                    _ => return Err(ExError {opcode})
                 }
             },
             // SNE Vx, Vy - Skip next instruction if Vx != Vy
@@ -222,17 +309,37 @@ impl ChipSystem {
                 self.registers.set_gp(comps.v1 as usize, value);
             },
             // DRW Vx, Vy, N - Draw a sprite coord (Vx, Vy) with height N
-            // TODO: Implement
-            0xD => {},
+            0xD => {
+                let x_loc = comps.v1;
+                let y_loc = comps.v2;
+                let nbytes = comps.v3;
+                let sprite_mem_loc = self.registers.get_i();
+                let sprite_bytes = self.ram.get_nbytes(sprite_mem_loc, nbytes);
+                let overlap = self.display.draw_sprite(x_loc, y_loc, sprite_bytes);
+                match overlap {
+                    true => self.registers.set_gp(15, 1),
+                    false => self.registers.set_gp(15, 0),
+                }
+            },
             0xE => {
                 match (comps.v2 << 4) + comps.v3 {
                     // SKP Vx - Skip next instruction if key (0-15) is pressed
-                    // TODO: Implement
-                    0x9E => {},
+                    0x9E => {
+                        let index = comps.v1 as u8;
+                        let key_val = self.keyboard.get_key(index);
+                        if key_val {
+                            self.registers.incr_pc();
+                        }
+                    },
                     // SKNP Vx - Skip next instruction if key (0-15) is not pressed
-                    // TODO: Implement
-                    0xA1 => {}
-                    _ => panic!("Invalid Opcode: {:04x}", opcode)
+                    0xA1 => {
+                        let index = comps.v1 as u8;
+                        let key_val = self.keyboard.get_key(index);
+                        if !key_val {
+                            self.registers.incr_pc();
+                        }
+                    }
+                    _ => return Err(ExError {opcode})
                 }
             },
             0xF => {
@@ -243,8 +350,11 @@ impl ChipSystem {
                         self.registers.set_gp(comps.v1 as usize, delay_val);
                     },
                     // LD Vx, K - Wait for keypress (halt), put key value in Vx
-                    // TODO: Implement
-                    0x0A => {},
+                    0x0A => {
+                        let key = self.keyboard.wait_key();
+                        let index = comps.v1 as usize;
+                        self.registers.set_gp(index, key); 
+                    },
                     // LD DT, Vx - Set the delay timer to the value in Vx
                     0x15 => {
                         let delay_val = comps.v1 as u8;
@@ -258,12 +368,16 @@ impl ChipSystem {
                     // ADD I, Vx - Set register I to I + Vx
                     0x1E => {
                         let i_val = self.registers.get_i();
-                        let value = i_val + comps.v1;
+                        let reg_x_val = self.registers.get_gp(comps.v1 as usize);
+                        let value = i_val + reg_x_val as u16;
                         self.registers.set_i(value);
                     },
                     // LD F, Vx - Set I to the location of sprite (I = Vx * 5)
-                    // TODO: Implement 
-                    0x29 => {},
+                    0x29 => {
+                        let reg_x_val = comps.v1;
+                        let new_i_val = reg_x_val * 5;
+                        self.registers.set_i(new_i_val);
+                    },
                     // LD B, Vx - Place the BCD of Vx in I (Hundreds), I+1 (Tens), I+2 (Ones)
                     0x33 => {
                         let reg_val = self.registers.get_gp(comps.v1 as usize);
@@ -293,14 +407,86 @@ impl ChipSystem {
                         let x_range = comps.v1;
                         let mut cur_reg: u8;
                         for loc in 0..x_range {
-                            cur_reg = self.ram.get_byte(loc);
-                            self.registers.set_gp(i_val as usize + loc as usize, cur_reg);
+                            cur_reg = self.ram.get_byte(i_val + loc);
+                            self.registers.set_gp(loc as usize, cur_reg);
                         }
                     },
-                    _ => panic!("Invalid Opcode: {:04x}", opcode)
+                    _ => return Err(ExError {opcode})
                 }
             }
-            _ => panic!("Invalid Opcode header: {:02x}", comps.h1)
+            _ => return Err(ExError {opcode})
+        }
+        // Increment program counter after opcode execution
+        return Ok(());
+    }
+
+    fn get_next_opcode(&self) -> u16 {
+        let index = self.registers.get_pc();
+        if index % 2 != 0 {
+            println!("Program Counter is not even: {}", index);
+            panic!("Program Counter register invalid")
+        }
+        self.ram.get_opcode(index)
+    }
+
+    /// Run the chip8 emulator in an infinite loop
+    pub fn run(&mut self) {
+        if !self.ram.has_loaded() {
+            println!("No ROM has been loaded.");
+            return 
+        }
+
+        let mut opcode: u16;
+        let mut res: ExResult<()>;
+        loop {
+            // Get current opcode and execute
+            opcode = self.get_next_opcode();
+            res = self.ex_opcode(opcode);
+            match res {
+                Ok(_) => self.registers.incr_pc(),
+                Err(e) => {
+                    println!("Execution halted; error occured");
+                    println!("Error: {:#?}", e);
+                    break;
+                }
+            }
+            self.registers.decr_d();
+            self.registers.decr_s();
+            self.registers.dump_registers();
+            thread::sleep(Duration::from_millis(16))
+        }
+        println!("Program Stopped");
+    }
+
+    /// Run an emulaton step, this executes a single opcode
+    /// from the chip8 memory system, pointed to by the PC reg
+    /// 
+    /// Returns a representation of the screen if it has been modified
+    pub fn step(&mut self) -> Option<Vec<bool>> {
+        let opcode = self.get_next_opcode();
+        let res: ExResult<()> = self.ex_opcode(opcode);
+        match res {
+            Ok(_) => self.registers.incr_pc(),
+            Err(e) => {
+                println!("Execution halted; error occured");
+                println!("Error: {:#?}", e);
+            }
+        }
+        self.registers.decr_d();
+        self.registers.decr_s();
+        match self.display.mod_check() {
+            true => return Some(self.display.get_display()),
+            false => return None
         }
     }
+
+    /// Load a ROM into the chip8 memory
+    /// 
+    /// # Arguments
+    /// 
+    /// * `rom` - a u8 vector representing the rom
+    pub fn load_rom(&mut self, rom: Vec<u8>) {
+        self.ram.load_bytes(rom);
+    }
+
 }
