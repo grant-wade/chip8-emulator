@@ -8,7 +8,7 @@ keywords = ["emulator", "library"]
 publish = false
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["dylib"]
 path = "src/system.rs"
 doc = true
 
