@@ -59,13 +59,17 @@ impl ChipDisplay {
         let mut mask;
         let mut init_val;
         let mut ret = false;
-        println!("Sprite: {:#?}", sprite);
+        // println!("Sprite: {:#?}", sprite);
+        // for i in 0..sprite.len() {
+            // println!("{:#010b}", sprite[i]);
+        // }
         for row in 0..row_count {
             // index = row * 8;
-            mask = 0x01;
+            mask = 0x80;
             for i in 0..8 {
                 // Calculate bit position with wrap around
                 pos = (((y_loc + row as u16) % 32) * 64) + ((x_loc + i) % 64);
+                // println!("Pixel Index: {}", pos);
                 init_val = self.display[pos as usize];
                 match sprite[row] & mask == mask {
                     true => self.display[pos as usize] ^= true,
@@ -75,10 +79,11 @@ impl ChipDisplay {
                 if ret == false && init_val == true && self.display[pos as usize] == false {
                     ret = true
                 }
-                mask <<= 1;
+                mask >>= 1;
             }
         }
-        self.draw_display();
+        self.modified = true;
+        // self.draw_display();
         return ret
     }
 

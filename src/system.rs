@@ -142,9 +142,8 @@ impl ChipSystem {
     /// 34. 0xFx65 - Retrieve `V0 -> Vx` from I
     ///  
     pub fn ex_opcode(&mut self, opcode: u16) -> ExResult<()> {
-        println!("Current Opcode: {:04x}", opcode);
         let comps = Opcode::new(opcode);
-
+        let mut update_pc = true;
         match comps.h1 {
             0x0 => {
                 match comps.v3 {
@@ -154,6 +153,7 @@ impl ChipSystem {
                     14 => {
                         let pc: u16 = self.registers.pop_stack();
                         self.registers.set_pc(pc);
+                        // update_pc = false;
                     },
                     // Skip Opcode
                     _ => {},
@@ -163,6 +163,7 @@ impl ChipSystem {
             0x1 => {
                 let pc: u16 = (comps.v1 << 8) + (comps.v2 << 4) + comps.v3;
                 self.registers.set_pc(pc);
+                update_pc = false;
             },
             // CALL - Jump to address with push to stack
             0x2 => {
@@ -170,6 +171,7 @@ impl ChipSystem {
                 let cur_pc = self.registers.get_pc();
                 self.registers.push_stack(cur_pc);
                 self.registers.set_pc(new_pc);
+                update_pc = false;
             },
             // SE Vx, Byte - Skip instruction if Vx == Byte
             0x3 => {
@@ -202,8 +204,8 @@ impl ChipSystem {
             },
             // ADD Vx, Byte - Add byte value to Vx (Vx += Byte) no carry flag
             0x7 => {
-                let value: u8 = ((comps.v2 as u8) << 4) + comps.v3 as u8;
-                self.registers.add_gp(comps.v1 as usize, value);
+                let value: u16 = ((comps.v2) << 4) + comps.v3;
+                self.registers.add_gp(comps.v1 as usize, (value & 0xff) as u8);
             },
             0x8 => {
                 match comps.v3 {
@@ -301,6 +303,7 @@ impl ChipSystem {
                 let reg_v0_val = self.registers.get_gp(0);
                 let address = (comps.v1 << 8) + (comps.v2 << 4) + comps.v3;
                 self.registers.set_pc(address + reg_v0_val as u16);
+                update_pc = false;
             },
             // RND Vx, Byte - Set Vx to Byte & Random byte
             0xC => {
@@ -310,8 +313,9 @@ impl ChipSystem {
             },
             // DRW Vx, Vy, N - Draw a sprite coord (Vx, Vy) with height N
             0xD => {
-                let x_loc = comps.v1;
-                let y_loc = comps.v2;
+                let x_loc = self.registers.get_gp(comps.v1 as usize) as u16;
+                let y_loc = self.registers.get_gp(comps.v2 as usize) as u16;
+                // let y_loc = comps.v2;
                 let nbytes = comps.v3;
                 let sprite_mem_loc = self.registers.get_i();
                 let sprite_bytes = self.ram.get_nbytes(sprite_mem_loc, nbytes);
@@ -417,14 +421,18 @@ impl ChipSystem {
             _ => return Err(ExError {opcode})
         }
         // Increment program counter after opcode execution
+        if update_pc {
+            self.registers.incr_pc()
+        }
         return Ok(());
     }
 
     fn get_next_opcode(&self) -> u16 {
-        let index = self.registers.get_pc();
+        let mut index = self.registers.get_pc();
         if index % 2 != 0 {
+            index -= 1;
             println!("Program Counter is not even: {}", index);
-            panic!("Program Counter register invalid")
+            // panic!("Program Counter register invalid")
         }
         self.ram.get_opcode(index)
     }
@@ -462,11 +470,14 @@ impl ChipSystem {
     /// from the chip8 memory system, pointed to by the PC reg
     /// 
     /// Returns a representation of the screen if it has been modified
-    pub fn step(&mut self) -> Option<Vec<bool>> {
+    pub fn step(&mut self, display_opcode:  bool) -> (u16, Option<Vec<bool>>) {
         let opcode = self.get_next_opcode();
+        if display_opcode {
+            println!("Opcode: {:04x}", opcode);
+        }
         let res: ExResult<()> = self.ex_opcode(opcode);
         match res {
-            Ok(_) => self.registers.incr_pc(),
+            Ok(_) => {},
             Err(e) => {
                 println!("Execution halted; error occured");
                 println!("Error: {:#?}", e);
@@ -475,8 +486,8 @@ impl ChipSystem {
         self.registers.decr_d();
         self.registers.decr_s();
         match self.display.mod_check() {
-            true => return Some(self.display.get_display()),
-            false => return None
+            true => return (opcode, Some(self.display.get_display())),
+            false => return (opcode, None)
         }
     }
 
@@ -488,5 +499,4 @@ impl ChipSystem {
     pub fn load_rom(&mut self, rom: Vec<u8>) {
         self.ram.load_bytes(rom);
     }
-
 }

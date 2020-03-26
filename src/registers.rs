@@ -59,7 +59,14 @@ impl ChipRegisters {
     /// * `index` - which general purpose register
     /// * `value` - u8 value to add to register
     pub fn add_gp(&mut self, index: usize, value: u8) {
-        self.gp_reg[index] += value;
+        // self.gp_reg[index] += value;
+        self.gp_reg[index] = {
+            let val = value as u16 + self.gp_reg[index] as u16;
+            match val > 255 {
+                true => (val & 0x00ff) as u8,
+                false => val as u8
+            }
+        };
     }
 
     /// Set the value of the I register
@@ -143,14 +150,14 @@ impl ChipRegisters {
     /// 
     /// * `addr` - address to push to the stack
     pub fn push_stack(&mut self, addr: u16) {
-        self.sp_reg += 1;
         self.stack[self.sp_reg as usize] = addr;
+        self.sp_reg += 1;
     }
 
     /// Pop an address from the stack, decrementing sp
     pub fn pop_stack(&mut self) -> u16 {
-        let addr = self.stack[self.sp_reg];
         self.sp_reg -= 1;
+        let addr = self.stack[self.sp_reg];
         return addr;
     }
 

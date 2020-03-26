@@ -17,11 +17,38 @@ pub struct ChipMemory {
 impl ChipMemory {
     /// Init a chip8 memory structure 
     pub fn init() -> Self {
+        // let ram: Vec<u8> = vec![0; 4096];
+        let ram = ChipMemory::load_symbols(vec![0; 4096]);
         ChipMemory {
-            ram: vec![0; 4096], // Size of chip8 ram
+            ram, // Size of chip8 ram
             loaded: false,
             start: 512
         }
+    }
+
+    fn load_symbols(mut ram: Vec<u8>) -> Vec<u8> {
+        let hex_chars = [
+            0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+            0x20, 0x60, 0x20, 0x20, 0x70, // 1
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+            0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+            0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+            0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+            0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+            0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+            0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+            0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+        ];
+        for i in 0..hex_chars.len() {
+            ram[i + 0x050] = hex_chars[i];
+        }
+        ram
     }
 
     /// Returns true if a ROM has been loaded, false otherwise
@@ -46,7 +73,24 @@ impl ChipMemory {
     pub fn load_bytes(&mut self, rom: Vec<u8>) {
         let len = rom.len();
         for i in 0..len {
-            self.ram[i + self.start] = rom[i]
+            self.ram[i + self.start] = rom[i]; 
+            
+            // { // Flip bit order
+            //     let mut switched: u8 = 0;
+            //     let mut mask: u8 = 0x80;
+            //     let mut mask_inv: u8 = 0x01;
+            //     for _ in 0..8 {
+            //         switched += {
+            //             match mask & rom[i] == mask {
+            //                 true => mask_inv,
+            //                 false => 0
+            //             }
+            //         };
+            //         mask >>= 1;
+            //         mask_inv <<= 1;
+            //     }
+            //     switched
+            // }
         }
     }
 
@@ -96,6 +140,7 @@ impl ChipMemory {
             }
             print!("{:02x}", self.ram[i]);
         }
+        println!("");
     }
 
     /// Load a file from disk and write its bytes into 

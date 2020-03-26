@@ -1,4 +1,5 @@
 # Chip8 Emulation Library
+Created By Grant Wade <grant.wade@meridiansky.co>
 
 ## Emulator Information
 
@@ -6,7 +7,7 @@ This emulator implments all 35 original Chip8 opcodes and supports a 64x32 pixel
 
 Since the implementation was done as a library it is not a full solution to run and interact with a Chip8 program. While this may implement all needed features to run the program it requires another program to display the screen and let the emulator know when a key is pressed. There will be another project that runs the emulator in WASM and uses a browser to interact and display.
 
-The actual implementation was done in [Rust](https://www.rust-lang.org/) with minimal dependencies as a project to learn more about the language. This is still a work in progress and any suggestions are welcome. For this reason there is probably no reason to submit this as a [crate](https://crates.io/).
+The actual implementation was done in [Rust](https://www.rust-lang.org/) with minimal dependencies as a project to learn more about the language and creating an emulator. This is still a work in progress and any suggestions are welcome. For this reason there is probably no reason to submit this as a [crate](https://crates.io/).
 
 
 
